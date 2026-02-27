@@ -36,91 +36,66 @@
     </div>
 
     <script>
-        // Configurações Reais do seu Contrato
-        const contractAddress = "0x86114e189521448B183BE17F143532b3DACd1F0e"; 
-        const abi = [ 
-            "function enviarMensagem(string _texto) public", 
-            "function getMensagens() view returns (tuple(address remetente, string texto, uint256 timestamp)[])" 
-        ];
+        // 1. Corrija o 00x para 0x
+const contractAddress = "0xf6e25546515eeBb9F8DA6BCBC830F8C16c377f01"; 
 
-        let provider;
-        let signer;
-        let contract;
+// 2. Lógica de envio com bloqueio de botão
+async function sendMessage() {
+    const input = document.getElementById('msgInput');
+    const sendBtn = document.querySelector("button[onclick='sendMessage()']");
+    const text = input.value;
 
-        // Lógica de Conexão que você solicitou (Baseada no Dashboard)
-        async function connectExperience() {
-            if (typeof window.ethereum !== 'undefined') {
-                try {
-                    // Solicita contas exatamente como no seu exemplo funcional
-                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                    const account = accounts[0];
+    if (!text || !contract) return alert("Conecte a carteira!");
 
-                    // Inicializa o contrato
-                    provider = new ethers.providers.Web3Provider(window.ethereum);
-                    signer = provider.getSigner();
-                    contract = new ethers.Contract(contractAddress, abi, signer);
+    try {
+        // Bloqueia interface
+        input.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.innerText = "⌛...";
 
-                    document.getElementById('walletAddress').innerText = "CONECTADO: " + account;
-                    document.getElementById('connectBtn').innerText = "Carteira Ativa ✅";
-                    
-                    // Carrega as mensagens reais após conectar
-                    refreshChat();
-                } catch (err) {
-                    console.error("Erro na conexão:", err);
-                    alert("A conexão foi recusada.");
-                }
-            } else {
-                alert("MetaMask não encontrada!");
-            }
-        }
+        const tx = await contract.enviarMensagem(text);
+        console.log("Transação enviada:", tx.hash);
+        
+        await tx.wait(); // Aguarda confirmação na rede
+        
+        input.value = "";
+        refreshChat(); 
+    } catch (err) {
+        console.error("Erro ao enviar:", err);
+        alert("Erro na transação ou usuário cancelou.");
+    } finally {
+        // Libera interface
+        input.disabled = false;
+        sendBtn.disabled = false;
+        sendBtn.innerText = "Enviar";
+    }
+}
 
-        // Função para buscar mensagens reais do seu contrato
-        async function refreshChat() {
-            if (!contract) return;
-            try {
-                const mensagens = await contract.getMensagens();
-                const container = document.getElementById('messages');
-                container.innerHTML = ""; // Limpa o chat
+// 3. Verificação de conta ativa (Correção de bug de refresh)
+async function refreshChat() {
+    if (!contract) return;
+    try {
+        const mensagens = await contract.getMensagens();
+        const container = document.getElementById('messages');
+        container.innerHTML = ""; 
 
-                mensagens.forEach(msg => {
-                    const isMe = msg.remetente.toLowerCase() === window.ethereum.selectedAddress.toLowerCase();
-                    const div = document.createElement('div');
-                    div.className = `msg ${isMe ? 'sent' : 'received'}`;
-                    
-                    const addrLabel = isMe ? "Você" : msg.remetente.substring(0, 6) + "...";
-                    div.innerHTML = `<b>${addrLabel}:</b> ${msg.texto}`;
-                    container.appendChild(div);
-                });
-                container.scrollTop = container.scrollHeight;
-            } catch (err) {
-                console.error("Erro ao carregar mensagens:", err);
-            }
-        }
+        // Pega o endereço atual de forma segura
+        const userAddress = (await signer.getAddress()).toLowerCase();
 
-        // Função para enviar mensagem real para a blockchain
-        async function sendMessage() {
-            const input = document.getElementById('msgInput');
-            const text = input.value;
-
-            if (!text || !contract) return alert("Conecte a carteira e escreva algo!");
-
-            try {
-                const tx = await contract.enviarMensagem(text);
-                input.value = "Processando...";
-                
-                await tx.wait(); // Espera a mineração na rede
-                
-                input.value = "";
-                refreshChat(); // Atualiza a lista
-            } catch (err) {
-                console.error("Erro ao enviar:", err);
-                input.value = text;
-                alert("Erro na transação!");
-            }
-        }
-
-        // Atualiza o chat a cada 15 segundos para ver novas mensagens de outros membros
-        setInterval(refreshChat, 15000);
+        mensagens.forEach(msg => {
+            const isMe = msg.remetente.toLowerCase() === userAddress;
+            const div = document.createElement('div');
+            div.className = `msg ${isMe ? 'sent' : 'received'}`;
+            
+            const addrLabel = isMe ? "Você" : msg.remetente.substring(0, 6) + "...";
+            div.innerHTML = `<b>${addrLabel}:</b> ${msg.texto}`;
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    } catch (err) {
+        console.log("Erro ao carregar (talvez o chat ainda esteja vazio):", err);
+    }
+}
     </script>
 </body>
 </html>
